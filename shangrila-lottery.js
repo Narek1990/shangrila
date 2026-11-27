@@ -14,8 +14,9 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v3-overlay-fix';
+  var VERSION = '2026-11-27-v4-page-content';
   var STYLE_ID = 'shangrila-lottery-experience-style';
+  var PAGE_CONTENT_SELECTOR = '[data-mj="page-content"]';
   var ROOT_SELECTOR = '[class*="wheelWrapper_content"]';
   var COUNT_SELECTOR = '[class*="spinCount"]';
   var ROOT_MARKER = 'data-shangrila-lottery-root';
@@ -29,6 +30,7 @@
   var state = {
     observer: null,
     retryTimer: null,
+    pageContent: null,
     root: null,
     overlay: null,
     ticketCount: null,
@@ -69,11 +71,14 @@
   }, 500);
 
   function mount() {
-    var root = document.querySelector(ROOT_SELECTOR);
+    var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
+    var root = pageContent && pageContent.querySelector(ROOT_SELECTOR);
+    if (!root) root = document.querySelector(ROOT_SELECTOR);
     if (!root) return false;
 
     if (state.root !== root) {
       restorePreviousRoot();
+      state.pageContent = pageContent && pageContent.contains(root) ? pageContent : null;
       state.root = root;
       state.ticketCount = readNumber(root.querySelector(COUNT_SELECTOR));
     } else {
@@ -83,8 +88,14 @@
       if (liveCount !== null && liveCount !== state.ticketCount) state.ticketCount = liveCount;
     }
 
+    var resolvedPageContent = pageContent && pageContent.contains(root) ? pageContent : null;
+    if (resolvedPageContent !== state.pageContent) {
+      state.pageContent = resolvedPageContent;
+      if (state.overlay) (state.pageContent || document.body).appendChild(state.overlay);
+    }
+
     hideSource(root);
-    if (!state.overlay || !document.body.contains(state.overlay)) render(root);
+    if (!state.overlay || !(state.pageContent || document.body).contains(state.overlay)) render(root, state.pageContent);
     updateTicketCount();
     return true;
   }
@@ -108,7 +119,7 @@
     return date;
   }
 
-  function render(root) {
+  function render(root, pageContent) {
     hideSource(root);
     var overlay = document.createElement('div');
     overlay.className = 'shangrila-lottery-root shangrila-lottery-reference shangrila-lottery-overlay';
@@ -184,7 +195,7 @@
         '</footer>',
       '</main>'
     ].join('');
-    document.body.appendChild(overlay);
+    (pageContent || document.body).appendChild(overlay);
     state.overlay = overlay;
     updateCountdown();
   }
@@ -665,6 +676,16 @@
         .shangrila-lottery-reference-steps { grid-template-columns: 1fr; }\
         .shangrila-lottery-reference-rules { align-items: flex-start; flex-direction: column; }\
       }\
+\
+      /* Keep the lottery surface inside the page-content flow. */\
+      .shangrila-lottery-reference.shangrila-lottery-overlay {\
+        position: relative !important;\
+        inset: auto !important;\
+        z-index: auto !important;\
+        width: 100% !important;\
+        min-height: 100% !important;\
+        overflow: visible !important;\
+      }\
     ';
     document.head.appendChild(style);
   }
@@ -676,6 +697,7 @@
   function restorePreviousRoot() {
     if (state.root) state.root.removeAttribute(SOURCE_HIDDEN_MARKER);
     if (state.overlay) state.overlay.remove();
+    state.pageContent = null;
     state.overlay = null;
   }
 
