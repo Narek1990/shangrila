@@ -14,7 +14,7 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v8-route-image';
+  var VERSION = '2026-11-27-v9-subtree-lookup';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var LOTTERY_ROUTE = '/lottery';
   var LOTTERY_IMAGE_URL = 'https://shangrilavip.com/cms/uploads/2027_NY_Lottery_Thumbnail_20553e12e1.webp';
@@ -108,7 +108,7 @@
 
     var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
     var firstLevel = pageContent && pageContent.firstElementChild;
-    var sourceRoot = firstLevel && firstLevel.querySelector(ROOT_SELECTOR);
+    var sourceRoot = pageContent && pageContent.querySelector(ROOT_SELECTOR);
 
     if (!sourceRoot) {
       if (state.overlay && pageContent && pageContent.contains(state.overlay)) {
