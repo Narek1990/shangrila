@@ -14,7 +14,7 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v11-fixed-layer-layout';
+  var VERSION = '2026-11-27-v12-mobile-artwork';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var LOTTERY_ROUTE = '/lottery';
   var LOTTERY_IMAGE_URL = 'https://shangrilavip.com/cms/uploads/2027_NY_Lottery_Thumbnail_20553e12e1.webp';
@@ -293,9 +293,6 @@
             '<img class="shangrila-lottery-reference-art-image" src="', LOTTERY_IMAGE_URL, '" alt="Shangri La VIP New Year Lottery">',
             '<span class="shangrila-lottery-reference-art-kicker">SHANGRI LA VIP</span>',
             '<strong>LOTTERY</strong>',
-            '<div class="shangrila-lottery-reference-art-orb orb-one" aria-hidden="true">1</div>',
-            '<div class="shangrila-lottery-reference-art-orb orb-two" aria-hidden="true">9</div>',
-            '<div class="shangrila-lottery-reference-art-orb orb-three" aria-hidden="true">3</div>',
             '<span class="shangrila-lottery-reference-art-note">YOUR LUCKY NUMBERS</span>',
           '</div>',
           '<div class="shangrila-lottery-reference-content">',
@@ -811,25 +808,6 @@
       .shangrila-lottery-reference-art-kicker { color: var(--shangrila-lottery-cream); font-size: 10px; font-weight: 800; letter-spacing: .18em; }\
       .shangrila-lottery-reference-art strong { margin-top: 10px; color: var(--shangrila-lottery-gold); font-family: Georgia, serif; font-size: clamp(34px, 5vw, 58px); line-height: .9; letter-spacing: .04em; text-shadow: 0 4px 24px rgba(0, 0, 0, .6); }\
       .shangrila-lottery-reference-art-note { margin-top: 15px; color: rgba(255,255,255,.68); font-size: 9px; letter-spacing: .2em; }\
-      .shangrila-lottery-reference-art-orb {\
-        position: absolute;\
-        z-index: 1;\
-        display: grid;\
-        place-items: center;\
-        width: 58px;\
-        height: 58px;\
-        border: 2px solid var(--shangrila-lottery-gold);\
-        border-radius: 50%;\
-        background: radial-gradient(circle at 32% 28%, #fff2bf, #dbac45 42%, #774c18 100%);\
-        color: #15151f;\
-        font-family: Georgia, serif;\
-        font-size: 26px;\
-        box-shadow: 0 8px 28px rgba(0,0,0,.42);\
-      }\
-      .shangrila-lottery-reference-art-orb::after { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; }\
-      .shangrila-lottery-reference-art .orb-one { top: 62px; left: 54px; }\
-      .shangrila-lottery-reference-art .orb-two { top: 124px; right: 44px; transform: scale(.82); }\
-      .shangrila-lottery-reference-art .orb-three { top: 184px; left: 125px; transform: scale(.66); }\
       .shangrila-lottery-reference-content {\
         position: relative;\
         z-index: 2;\
@@ -899,7 +877,7 @@
         .shangrila-lottery-reference.shangrila-lottery-overlay { top: 56px !important; bottom: 56px !important; }\
         .shangrila-lottery-reference .shangrila-lottery-page { padding: 18px 12px 28px; }\
         .shangrila-lottery-reference-hero, .shangrila-lottery-reference-info-grid { grid-template-columns: 1fr; }\
-        .shangrila-lottery-reference-art { min-height: 0; aspect-ratio: 16 / 10; }\
+        .shangrila-lottery-reference-art { min-height: 0; aspect-ratio: 1 / 1; }\
         .shangrila-lottery-reference-art-image { object-fit: contain; background: #0a1b12; }\
         .shangrila-lottery-reference-balance { grid-template-columns: 1fr; padding: 19px 15px; }\
         .shangrila-lottery-reference-countdown-grid { max-width: 320px; }\
