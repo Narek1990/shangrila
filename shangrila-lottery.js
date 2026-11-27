@@ -14,13 +14,12 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v4-page-content';
+  var VERSION = '2026-11-27-v5-replace-first-level';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var PAGE_CONTENT_SELECTOR = '[data-mj="page-content"]';
   var ROOT_SELECTOR = '[class*="wheelWrapper_content"]';
   var COUNT_SELECTOR = '[class*="spinCount"]';
   var ROOT_MARKER = 'data-shangrila-lottery-root';
-  var SOURCE_HIDDEN_MARKER = 'data-shangrila-lottery-source-hidden';
 
   if (window.__shangrilaLotteryTickets) {
     if (window.__shangrilaLotteryTickets.version === VERSION) return;
@@ -32,6 +31,7 @@
     retryTimer: null,
     pageContent: null,
     root: null,
+    sourceRoot: null,
     overlay: null,
     ticketCount: null,
     drawAt: null,
@@ -72,31 +72,34 @@
 
   function mount() {
     var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
-    var root = pageContent && pageContent.querySelector(ROOT_SELECTOR);
-    if (!root) root = document.querySelector(ROOT_SELECTOR);
-    if (!root) return false;
+    var firstLevel = pageContent && pageContent.firstElementChild;
+    var sourceRoot = firstLevel && firstLevel.querySelector(ROOT_SELECTOR);
 
-    if (state.root !== root) {
+    if (!sourceRoot) {
+      if (state.overlay && pageContent && pageContent.contains(state.overlay)) {
+        updateTicketCount();
+        updateCountdown();
+        return true;
+      }
+      return false;
+    }
+
+    if (state.root !== firstLevel) {
       restorePreviousRoot();
-      state.pageContent = pageContent && pageContent.contains(root) ? pageContent : null;
-      state.root = root;
-      state.ticketCount = readNumber(root.querySelector(COUNT_SELECTOR));
+      state.pageContent = pageContent;
+      state.root = firstLevel;
+      state.sourceRoot = sourceRoot;
+      state.ticketCount = readNumber(sourceRoot.querySelector(COUNT_SELECTOR));
     } else {
-      // React can update the original counter after the route mounts. Re-read
-      // it without ever touching the React-owned markup.
-      var liveCount = readNumber(root.querySelector(COUNT_SELECTOR));
+      // React can update the original counter before the first-level node is
+      // replaced. Re-read it without modifying the React-owned source tree.
+      var liveCount = readNumber(sourceRoot.querySelector(COUNT_SELECTOR));
       if (liveCount !== null && liveCount !== state.ticketCount) state.ticketCount = liveCount;
     }
 
-    var resolvedPageContent = pageContent && pageContent.contains(root) ? pageContent : null;
-    if (resolvedPageContent !== state.pageContent) {
-      state.pageContent = resolvedPageContent;
-      if (state.overlay) (state.pageContent || document.body).appendChild(state.overlay);
-    }
-
-    hideSource(root);
-    if (!state.overlay || !(state.pageContent || document.body).contains(state.overlay)) render(root, state.pageContent);
+    if (!state.overlay || !pageContent.contains(state.overlay)) render(firstLevel, sourceRoot);
     updateTicketCount();
+    updateCountdown();
     return true;
   }
 
@@ -119,12 +122,11 @@
     return date;
   }
 
-  function render(root, pageContent) {
-    hideSource(root);
+  function render(host, sourceRoot) {
     var overlay = document.createElement('div');
     overlay.className = 'shangrila-lottery-root shangrila-lottery-reference shangrila-lottery-overlay';
     overlay.setAttribute(ROOT_MARKER, 'true');
-    overlay.style.setProperty('--shangrila-lottery-source-art', root.style.backgroundImage || 'none');
+    overlay.style.setProperty('--shangrila-lottery-source-art', sourceRoot.style.backgroundImage || 'none');
     overlay.innerHTML = [
       '<main class="shangrila-lottery-page" aria-label="Lottery dashboard">',
         '<section class="shangrila-lottery-reference-hero">',
@@ -195,7 +197,7 @@
         '</footer>',
       '</main>'
     ].join('');
-    (pageContent || document.body).appendChild(overlay);
+    host.replaceWith(overlay);
     state.overlay = overlay;
     updateCountdown();
   }
@@ -242,7 +244,7 @@
     state.overlay.querySelectorAll('.shangrila-lottery-ticket-label').forEach(function (element) {
       element.textContent = state.ticketCount === 1 ? 'Lottery ticket' : 'Lottery tickets';
     });
-    state.root.setAttribute('data-shangrila-lottery-tickets', String(state.ticketCount));
+    state.overlay.setAttribute('data-shangrila-lottery-tickets', String(state.ticketCount));
   }
 
   function updateCountdown() {
@@ -686,24 +688,68 @@
         min-height: 100% !important;\
         overflow: visible !important;\
       }\
+\
+      /* Live vipshangrila.com palette: forest green, cream and champagne gold. */\
+      .shangrila-lottery-reference {\
+        --shangrila-lottery-green: #75c928;\
+        --shangrila-lottery-gold: #d9b267;\
+        --shangrila-lottery-cream: #f3e5bd;\
+        --shangrila-lottery-purple: #07140e;\
+        --shangrila-lottery-card: #0d2117;\
+        --shangrila-lottery-border: #294535;\
+        background: #07140e !important;\
+        color: #f7f1df !important;\
+      }\
+      .shangrila-lottery-reference::before {\
+        background: radial-gradient(circle at 16% 12%, rgba(117, 201, 40, .13), transparent 25%),\
+          radial-gradient(circle at 90% 10%, rgba(217, 178, 103, .12), transparent 28%),\
+          linear-gradient(145deg, #06120c 0%, #0a1c13 58%, #06120c 100%);\
+      }\
+      .shangrila-lottery-reference::after { opacity: .14; }\
+      .shangrila-lottery-reference-content, .shangrila-lottery-reference-info-card {\
+        border-color: var(--shangrila-lottery-border);\
+        background: rgba(10, 29, 19, .95);\
+      }\
+      .shangrila-lottery-reference-eyebrow { color: var(--shangrila-lottery-gold); }\
+      .shangrila-lottery-reference-content h1 { color: var(--shangrila-lottery-cream); }\
+      .shangrila-lottery-reference-art {\
+        border-color: rgba(217, 178, 103, .42);\
+        background-color: #0a1b12;\
+      }\
+      .shangrila-lottery-reference-balance {\
+        border-color: #2d4b39;\
+        background: #07170e;\
+      }\
+      .shangrila-lottery-reference-balance-copy strong, .shangrila-lottery-reference-countdown-unit strong { color: var(--shangrila-lottery-green); }\
+      .shangrila-lottery-reference-countdown-unit { border-color: #35533e; background: #07170e; }\
+      .shangrila-lottery-reference-steps .shangrila-lottery-step { border-color: #294535; background: #0a1a11; }\
+      .shangrila-lottery-reference-info-card h2 { color: var(--shangrila-lottery-cream); }\
+      .shangrila-lottery-reference-prize-card ul { color: #e7e0cf; }\
+      .shangrila-lottery-reference-rules { border-color: rgba(217,178,103,.3); background: rgba(8, 29, 17, .82); }\
+      .shangrila-lottery-reference-rules h2 { color: var(--shangrila-lottery-cream); }\
+      .shangrila-lottery-reference-rules a { border-color: rgba(117,201,40,.58); color: var(--shangrila-lottery-green); }\
+      .shangrila-lottery-reference .shangrila-lottery-footer a { color: var(--shangrila-lottery-gold); }\
     ';
     document.head.appendChild(style);
   }
 
-  function hideSource(root) {
-    root.setAttribute(SOURCE_HIDDEN_MARKER, 'true');
-  }
-
   function restorePreviousRoot() {
-    if (state.root) state.root.removeAttribute(SOURCE_HIDDEN_MARKER);
-    if (state.overlay) state.overlay.remove();
+    if (state.overlay && state.root && state.overlay.parentNode &&
+        state.overlay.parentNode.firstElementChild === state.overlay) {
+      state.overlay.replaceWith(state.root);
+    } else if (state.overlay) {
+      state.overlay.remove();
+    }
     state.pageContent = null;
+    state.root = null;
+    state.sourceRoot = null;
     state.overlay = null;
   }
 
   function destroy() {
     if (state.observer) state.observer.disconnect();
     if (state.retryTimer) window.clearInterval(state.retryTimer);
+    if (state.drawTimer) window.clearInterval(state.drawTimer);
     restorePreviousRoot();
     var style = document.getElementById(STYLE_ID);
     if (style) style.remove();
