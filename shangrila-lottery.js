@@ -13,11 +13,12 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v2-lottery-ui';
+  var VERSION = '2026-11-27-v3-overlay-fix';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var ROOT_SELECTOR = '[class*="wheelWrapper_content"]';
   var COUNT_SELECTOR = '[class*="spinCount"]';
   var ROOT_MARKER = 'data-shangrila-lottery-root';
+  var SOURCE_HIDDEN_MARKER = 'data-shangrila-lottery-source-hidden';
 
   if (window.__shangrilaLotteryTickets) {
     if (window.__shangrilaLotteryTickets.version === VERSION) return;
@@ -28,9 +29,7 @@
     observer: null,
     retryTimer: null,
     root: null,
-    originalHTML: null,
-    originalClass: null,
-    originalStyle: null,
+    overlay: null,
     ticketCount: null
   };
 
@@ -45,7 +44,12 @@
   injectStyles();
   mount();
 
-  state.observer = new MutationObserver(function () {
+  state.observer = new MutationObserver(function (mutations) {
+    // Ignore mutations caused by updating our own overlay. React changes in
+    // the hidden source tree still pass through and refresh the balance.
+    if (state.overlay && mutations.every(function (mutation) {
+      return state.overlay.contains(mutation.target);
+    })) return;
     mount();
   });
   state.observer.observe(document.documentElement, {
@@ -67,18 +71,16 @@
     if (state.root !== root) {
       restorePreviousRoot();
       state.root = root;
-      state.originalHTML = root.innerHTML;
-      state.originalClass = root.className;
-      state.originalStyle = root.getAttribute('style');
       state.ticketCount = readNumber(root.querySelector(COUNT_SELECTOR));
-    } else if (!root.querySelector('[' + ROOT_MARKER + ']')) {
-      // React can replace the wheel markup after the route mounts. Re-read its
-      // count before rebuilding the lottery surface if that happens.
+    } else {
+      // React can update the original counter after the route mounts. Re-read
+      // it without ever touching the React-owned markup.
       var liveCount = readNumber(root.querySelector(COUNT_SELECTOR));
-      if (liveCount !== null) state.ticketCount = liveCount;
+      if (liveCount !== null && liveCount !== state.ticketCount) state.ticketCount = liveCount;
     }
 
-    if (!root.querySelector('[' + ROOT_MARKER + ']')) render(root);
+    hideSource(root);
+    if (!state.overlay || !document.body.contains(state.overlay)) render(root);
     updateTicketCount();
     return true;
   }
@@ -93,9 +95,11 @@
   }
 
   function render(root) {
-    root.classList.add('shangrila-lottery-root');
-    root.setAttribute(ROOT_MARKER, 'true');
-    root.innerHTML = [
+    hideSource(root);
+    var overlay = document.createElement('div');
+    overlay.className = 'shangrila-lottery-root shangrila-lottery-overlay';
+    overlay.setAttribute(ROOT_MARKER, 'true');
+    overlay.innerHTML = [
       '<main class="shangrila-lottery-page" aria-label="Lottery dashboard">',
         '<section class="shangrila-lottery-hero">',
           '<div class="shangrila-lottery-orbit shangrila-lottery-orbit-one" aria-hidden="true"></div>',
@@ -174,6 +178,8 @@
         '</footer>',
       '</main>'
     ].join('');
+    document.body.appendChild(overlay);
+    state.overlay = overlay;
   }
 
   function prizeCard(number, title, reward, detail) {
@@ -200,13 +206,13 @@
   }
 
   function updateTicketCount() {
-    if (!state.root || state.ticketCount === null) return;
+    if (!state.overlay || state.ticketCount === null) return;
     var formatted = formatCount(state.ticketCount);
-    state.root.querySelectorAll('.shangrila-lottery-ticket-count-value').forEach(function (element) {
+    state.overlay.querySelectorAll('.shangrila-lottery-ticket-count-value').forEach(function (element) {
       element.textContent = String(state.ticketCount);
       element.setAttribute('aria-label', formatted);
     });
-    state.root.querySelectorAll('.shangrila-lottery-ticket-label').forEach(function (element) {
+    state.overlay.querySelectorAll('.shangrila-lottery-ticket-label').forEach(function (element) {
       element.textContent = state.ticketCount === 1 ? 'Lottery ticket' : 'Lottery tickets';
     });
     state.root.setAttribute('data-shangrila-lottery-tickets', String(state.ticketCount));
@@ -236,6 +242,21 @@
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = '\
+      [' + SOURCE_HIDDEN_MARKER + '="true"] {\
+        display: none !important;\
+      }\
+\
+      .shangrila-lottery-overlay {\
+        position: fixed !important;\
+        z-index: 1000 !important;\
+        top: 56px;\
+        right: 0;\
+        bottom: 56px;\
+        left: 0;\
+        overflow: auto !important;\
+        overscroll-behavior: contain;\
+      }\
+\
       .shangrila-lottery-root {\
         position: relative !important;\
         overflow: hidden !important;\
@@ -472,6 +493,10 @@
         .shangrila-lottery-footer { flex-direction: column; }\
       }\
 \
+      @media (min-width: 761px) {\
+        .shangrila-lottery-overlay { top: 72px; bottom: 0; }\
+      }\
+\
       @media (prefers-reduced-motion: reduce) {\
         .shangrila-lottery-prize-card { transition: none; }\
       }\
@@ -479,13 +504,14 @@
     document.head.appendChild(style);
   }
 
+  function hideSource(root) {
+    root.setAttribute(SOURCE_HIDDEN_MARKER, 'true');
+  }
+
   function restorePreviousRoot() {
-    if (!state.root || state.originalHTML === null) return;
-    state.root.innerHTML = state.originalHTML;
-    state.root.className = state.originalClass;
-    if (state.originalStyle === null) state.root.removeAttribute('style');
-    else state.root.setAttribute('style', state.originalStyle);
-    state.root.removeAttribute(ROOT_MARKER);
+    if (state.root) state.root.removeAttribute(SOURCE_HIDDEN_MARKER);
+    if (state.overlay) state.overlay.remove();
+    state.overlay = null;
   }
 
   function destroy() {
