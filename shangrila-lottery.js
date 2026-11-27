@@ -14,7 +14,7 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v9-subtree-lookup';
+  var VERSION = '2026-11-27-v10-react-safe-portal';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var LOTTERY_ROUTE = '/lottery';
   var LOTTERY_IMAGE_URL = 'https://shangrilavip.com/cms/uploads/2027_NY_Lottery_Thumbnail_20553e12e1.webp';
@@ -107,10 +107,10 @@
     }
 
     var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
-    var firstLevel = pageContent && pageContent.firstElementChild;
     var sourceRoot = pageContent && pageContent.querySelector(ROOT_SELECTOR);
+    var sourceHost = sourceRoot && findSourceHost(sourceRoot, pageContent);
 
-    if (!sourceRoot) {
+    if (!sourceRoot || !sourceHost) {
       if (state.overlay && pageContent && pageContent.contains(state.overlay)) {
         updateTicketCount();
         updateCountdown();
@@ -119,10 +119,10 @@
       return false;
     }
 
-    if (state.root !== firstLevel || state.pageContent !== pageContent) {
+    if (state.root !== sourceHost || state.pageContent !== pageContent) {
       restorePreviousRoot();
       state.pageContent = pageContent;
-      state.root = firstLevel;
+      state.root = sourceHost;
       state.sourceRoot = sourceRoot;
       state.ticketCount = readNumber(sourceRoot.querySelector(COUNT_SELECTOR));
       refreshSpins();
@@ -130,11 +130,12 @@
     } else {
       // React can update the original counter before the first-level node is
       // replaced. Re-read it without modifying the React-owned source tree.
+      state.sourceRoot = sourceRoot;
       var liveCount = readNumber(sourceRoot.querySelector(COUNT_SELECTOR));
       if (liveCount !== null && liveCount !== state.ticketCount) state.ticketCount = liveCount;
     }
 
-    if (!state.overlay || !pageContent.contains(state.overlay)) render(firstLevel, sourceRoot, pageContent);
+    if (!state.overlay || !document.documentElement.contains(state.overlay)) render(sourceHost, sourceRoot);
     updateTicketCount();
     updateCountdown();
     return true;
@@ -271,7 +272,16 @@
     return null;
   }
 
-  function render(host, sourceRoot, pageContent) {
+  function findSourceHost(sourceRoot, pageContent) {
+    var wrapper = sourceRoot.closest && sourceRoot.closest('[class*="wheelWrapper_wrapper"]');
+    if (wrapper && pageContent.contains(wrapper)) return wrapper;
+
+    var firstLevel = pageContent.firstElementChild;
+    if (firstLevel && firstLevel.contains(sourceRoot)) return firstLevel;
+    return sourceRoot;
+  }
+
+  function render(host, sourceRoot) {
     host.setAttribute('data-shangrila-lottery-source-hidden', 'true');
     var overlay = document.createElement('div');
     overlay.className = 'shangrila-lottery-root shangrila-lottery-reference shangrila-lottery-overlay';
@@ -344,7 +354,9 @@
         '</section>',
       '</main>'
     ].join('');
-    pageContent.appendChild(overlay);
+    // Keep the replacement outside the React-owned page-content subtree.
+    // React can otherwise attempt to remove this node during route changes.
+    document.body.appendChild(overlay);
     state.overlay = overlay;
     updateCountdown();
   }
@@ -948,3 +960,30 @@
       }\
     ';
     document.head.appendChild(style);
+  }
+
+  function restorePreviousRoot() {
+    if (state.root) state.root.removeAttribute('data-shangrila-lottery-source-hidden');
+    if (state.overlay && state.overlay.parentNode) state.overlay.remove();
+    state.pageContent = null;
+    state.root = null;
+    state.sourceRoot = null;
+    state.overlay = null;
+  }
+
+  function destroy() {
+    if (state.observer) state.observer.disconnect();
+    if (state.retryTimer) window.clearInterval(state.retryTimer);
+    if (state.drawTimer) window.clearInterval(state.drawTimer);
+    if (state.spinsTimer) window.clearInterval(state.spinsTimer);
+    if (state.metaTimer) window.clearInterval(state.metaTimer);
+    window.removeEventListener('popstate', mount);
+    window.removeEventListener('shangrila-lottery-route-change', mount);
+    if (state.originalPushState) history.pushState = state.originalPushState;
+    if (state.originalReplaceState) history.replaceState = state.originalReplaceState;
+    restorePreviousRoot();
+    var style = document.getElementById(STYLE_ID);
+    if (style) style.remove();
+    delete window.__shangrilaLotteryTickets;
+  }
+})();
