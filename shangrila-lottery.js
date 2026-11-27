@@ -14,7 +14,7 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v10-react-safe-portal';
+  var VERSION = '2026-11-27-v11-fixed-layer-layout';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var LOTTERY_ROUTE = '/lottery';
   var LOTTERY_IMAGE_URL = 'https://shangrilavip.com/cms/uploads/2027_NY_Lottery_Thumbnail_20553e12e1.webp';
@@ -761,13 +761,13 @@
       }\
       .shangrila-lottery-reference::after { opacity: .08; background-size: 30px 30px; }\
       .shangrila-lottery-reference .shangrila-lottery-page {\
-        width: min(1120px, 100%);\
+        width: min(1170px, 100%);\
         padding: 28px clamp(16px, 4vw, 42px) 38px;\
       }\
       .shangrila-lottery-reference-hero {\
         display: grid;\
-        grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);\
-        gap: 12px;\
+        grid-template-columns: minmax(360px, 400px) minmax(0, 1fr);\
+        gap: 20px;\
         align-items: stretch;\
       }\
       .shangrila-lottery-reference-art {\
@@ -786,6 +786,7 @@
         background-position: center;\
         background-size: cover;\
         box-shadow: inset 0 0 80px rgba(0, 0, 0, .48);\
+        z-index: 1;\
       }\
       .shangrila-lottery-reference-art-image {\
         position: absolute;\
@@ -830,6 +831,9 @@
       .shangrila-lottery-reference-art .orb-two { top: 124px; right: 44px; transform: scale(.82); }\
       .shangrila-lottery-reference-art .orb-three { top: 184px; left: 125px; transform: scale(.66); }\
       .shangrila-lottery-reference-content {\
+        position: relative;\
+        z-index: 2;\
+        min-width: 0;\
         padding: 17px 17px 24px;\
         border: 1px solid var(--shangrila-lottery-border);\
         border-radius: 14px;\
@@ -892,6 +896,7 @@
       .shangrila-lottery-reference .shangrila-lottery-footer a { color: var(--shangrila-lottery-gold); }\
 \
       @media (max-width: 760px) {\
+        .shangrila-lottery-reference.shangrila-lottery-overlay { top: 56px !important; bottom: 56px !important; }\
         .shangrila-lottery-reference .shangrila-lottery-page { padding: 18px 12px 28px; }\
         .shangrila-lottery-reference-hero, .shangrila-lottery-reference-info-grid { grid-template-columns: 1fr; }\
         .shangrila-lottery-reference-art { min-height: 0; aspect-ratio: 16 / 10; }\
@@ -905,14 +910,18 @@
         .shangrila-lottery-reference .shangrila-lottery-page { padding-bottom: 88px; }\
       }\
 \
-      /* Keep the lottery surface inside the page-content flow. */\
+      /* The replacement is rendered in document.body, above the site footer. */\
       .shangrila-lottery-reference.shangrila-lottery-overlay {\
-        position: relative !important;\
-        inset: auto !important;\
-        z-index: auto !important;\
-        width: 100% !important;\
-        min-height: 100% !important;\
-        overflow: visible !important;\
+        position: fixed !important;\
+        top: 72px !important;\
+        right: 0 !important;\
+        bottom: 0 !important;\
+        left: 0 !important;\
+        z-index: 10000 !important;\
+        width: 100vw !important;\
+        min-height: 0 !important;\
+        overflow-x: hidden !important;\
+        overflow-y: auto !important;\
       }\
 \
       /* Live vipshangrila.com palette: forest green, cream and champagne gold. */\
