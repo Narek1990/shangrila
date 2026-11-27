@@ -14,8 +14,10 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v7-meta-countdown';
+  var VERSION = '2026-11-27-v8-route-image';
   var STYLE_ID = 'shangrila-lottery-experience-style';
+  var LOTTERY_ROUTE = '/lottery';
+  var LOTTERY_IMAGE_URL = 'https://shangrilavip.com/cms/uploads/2027_NY_Lottery_Thumbnail_20553e12e1.webp';
   var PAGE_CONTENT_SELECTOR = '[data-mj="page-content"]';
   var ROOT_SELECTOR = '[class*="wheelWrapper_content"]';
   var COUNT_SELECTOR = '[class*="spinCount"]';
@@ -41,7 +43,9 @@
     spinsTimer: null,
     spinsRequestId: 0,
     metaTimer: null,
-    metaRequestId: 0
+    metaRequestId: 0,
+    originalPushState: null,
+    originalReplaceState: null
   };
 
   window.__shangrilaLotteryTickets = {
@@ -54,6 +58,7 @@
   };
 
   injectStyles();
+  installRouteListeners();
   mount();
 
   state.observer = new MutationObserver(function (mutations) {
@@ -78,7 +83,29 @@
   state.spinsTimer = window.setInterval(refreshSpins, 30000);
   state.metaTimer = window.setInterval(refreshWheelMetadata, 30000);
 
+  function installRouteListeners() {
+    state.originalPushState = history.pushState;
+    state.originalReplaceState = history.replaceState;
+    history.pushState = function () {
+      var result = state.originalPushState.apply(this, arguments);
+      window.dispatchEvent(new Event('shangrila-lottery-route-change'));
+      return result;
+    };
+    history.replaceState = function () {
+      var result = state.originalReplaceState.apply(this, arguments);
+      window.dispatchEvent(new Event('shangrila-lottery-route-change'));
+      return result;
+    };
+    window.addEventListener('popstate', mount);
+    window.addEventListener('shangrila-lottery-route-change', mount);
+  }
+
   function mount() {
+    if (!isLotteryRoute()) {
+      restorePreviousRoot();
+      return false;
+    }
+
     var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
     var firstLevel = pageContent && pageContent.firstElementChild;
     var sourceRoot = firstLevel && firstLevel.querySelector(ROOT_SELECTOR);
@@ -130,6 +157,11 @@
     if (state.drawTimer) window.clearInterval(state.drawTimer);
     state.drawTimer = date ? window.setInterval(updateCountdown, 1000) : null;
     return date;
+  }
+
+  function isLotteryRoute() {
+    var pathname = window.location.pathname.replace(/\/+$/, '');
+    return pathname === LOTTERY_ROUTE || pathname.slice(-LOTTERY_ROUTE.length) === LOTTERY_ROUTE;
   }
 
   function refreshSpins() {
@@ -244,7 +276,7 @@
     var overlay = document.createElement('div');
     overlay.className = 'shangrila-lottery-root shangrila-lottery-reference shangrila-lottery-overlay';
     overlay.setAttribute(ROOT_MARKER, 'true');
-    overlay.style.setProperty('--shangrila-lottery-source-art', sourceRoot.style.backgroundImage || 'none');
+    overlay.style.setProperty('--shangrila-lottery-art-image', 'url("' + LOTTERY_IMAGE_URL + '")');
     overlay.innerHTML = [
       '<main class="shangrila-lottery-page" aria-label="Lottery dashboard">',
         '<section class="shangrila-lottery-reference-hero">',
@@ -309,10 +341,6 @@
           '</div>',
           '<a href="/en/terms" target="_blank" rel="noopener">View terms and conditions</a>',
         '</section>',
-        '<footer class="shangrila-lottery-footer">',
-          '<span>Play responsibly. Terms and conditions apply.</span>',
-          '<a href="/en/terms" target="_blank" rel="noopener">Terms and conditions</a>',
-        '</footer>',
       '</main>'
     ].join('');
     pageContent.appendChild(overlay);
@@ -702,7 +730,7 @@
         padding: 30px 28px;\
         border: 1px solid rgba(221, 184, 106, .34);\
         border-radius: 14px;\
-        background-image: linear-gradient(145deg, rgba(5, 12, 9, .1), rgba(5, 8, 14, .82)), var(--shangrila-lottery-source-art);\
+        background-image: linear-gradient(145deg, rgba(5, 12, 9, .1), rgba(5, 8, 14, .82)), var(--shangrila-lottery-art-image);\
         background-color: #0d1b16;\
         background-position: center;\
         background-size: cover;\
@@ -867,6 +895,10 @@
     if (state.drawTimer) window.clearInterval(state.drawTimer);
     if (state.spinsTimer) window.clearInterval(state.spinsTimer);
     if (state.metaTimer) window.clearInterval(state.metaTimer);
+    window.removeEventListener('popstate', mount);
+    window.removeEventListener('shangrila-lottery-route-change', mount);
+    if (state.originalPushState) history.pushState = state.originalPushState;
+    if (state.originalReplaceState) history.replaceState = state.originalReplaceState;
     restorePreviousRoot();
     var style = document.getElementById(STYLE_ID);
     if (style) style.remove();
