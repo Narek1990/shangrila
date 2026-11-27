@@ -288,10 +288,6 @@
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = '\
-      [' + SOURCE_HIDDEN_MARKER + '="true"] {\
-        display: none !important;\
-      }\
-\
       .shangrila-lottery-overlay {\
         position: fixed !important;\
         z-index: 1000 !important;\
