@@ -72,8 +72,13 @@
       state.ticketCount = readNumber(element.textContent);
     }
 
-    var explicitCount = readNumber(element.getAttribute(TICKET_COUNT_ATTRIBUTE));
-    if (explicitCount !== null) state.ticketCount = explicitCount;
+    // If the site's React tree writes the original "N Spin" label back into
+    // the same node, treat that as the new live count. Otherwise keep a value
+    // supplied through setTickets() and avoid parsing our own rendered label.
+    if (!/lottery tickets?/i.test(element.textContent)) {
+      var liveCount = readNumber(element.textContent);
+      if (liveCount !== null) state.ticketCount = liveCount;
+    }
     render();
     return true;
   }
