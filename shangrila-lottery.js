@@ -14,11 +14,12 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v5-replace-first-level';
+  var VERSION = '2026-11-27-v6-api-sibling-overlay';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var PAGE_CONTENT_SELECTOR = '[data-mj="page-content"]';
   var ROOT_SELECTOR = '[class*="wheelWrapper_content"]';
   var COUNT_SELECTOR = '[class*="spinCount"]';
+  var SPINS_ENDPOINT = '/api/wheel/api/v1/UserSpinsSite/wheels/635/get-spins';
   var ROOT_MARKER = 'data-shangrila-lottery-root';
 
   if (window.__shangrilaLotteryTickets) {
@@ -35,7 +36,9 @@
     overlay: null,
     ticketCount: null,
     drawAt: null,
-    drawTimer: null
+    drawTimer: null,
+    spinsTimer: null,
+    spinsRequestId: 0
   };
 
   window.__shangrilaLotteryTickets = {
@@ -69,6 +72,7 @@
     attempts += 1;
     if (attempts >= 30) window.clearInterval(state.retryTimer);
   }, 500);
+  state.spinsTimer = window.setInterval(refreshSpins, 30000);
 
   function mount() {
     var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
@@ -84,12 +88,13 @@
       return false;
     }
 
-    if (state.root !== firstLevel) {
+    if (state.root !== firstLevel || state.pageContent !== pageContent) {
       restorePreviousRoot();
       state.pageContent = pageContent;
       state.root = firstLevel;
       state.sourceRoot = sourceRoot;
       state.ticketCount = readNumber(sourceRoot.querySelector(COUNT_SELECTOR));
+      refreshSpins();
     } else {
       // React can update the original counter before the first-level node is
       // replaced. Re-read it without modifying the React-owned source tree.
@@ -97,7 +102,7 @@
       if (liveCount !== null && liveCount !== state.ticketCount) state.ticketCount = liveCount;
     }
 
-    if (!state.overlay || !pageContent.contains(state.overlay)) render(firstLevel, sourceRoot);
+    if (!state.overlay || !pageContent.contains(state.overlay)) render(firstLevel, sourceRoot, pageContent);
     updateTicketCount();
     updateCountdown();
     return true;
@@ -122,7 +127,53 @@
     return date;
   }
 
-  function render(host, sourceRoot) {
+  function refreshSpins() {
+    var requestId = ++state.spinsRequestId;
+    fetch(SPINS_ENDPOINT, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' }
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Unable to load lottery ticket count.');
+      return response.json();
+    }).then(function (payload) {
+      if (requestId !== state.spinsRequestId) return;
+      var count = extractTicketCount(payload);
+      if (count === null) return;
+      state.ticketCount = count;
+      updateTicketCount();
+    }).catch(function () {
+      // Keep the last known count or the value rendered by the wheel when the
+      // endpoint is unavailable or the player is not authenticated.
+    });
+  }
+
+  function extractTicketCount(payload) {
+    if (typeof payload === 'number') return normalizeCount(payload);
+    if (!payload || typeof payload !== 'object') return null;
+
+    var preferredKeys = [
+      'availableTickets', 'lotteryTickets', 'tickets', 'availableSpins',
+      'spinCount', 'spins', 'count', 'total'
+    ];
+    for (var i = 0; i < preferredKeys.length; i += 1) {
+      var value = payload[preferredKeys[i]];
+      if (typeof value === 'number' || typeof value === 'string') {
+        var normalized = normalizeCount(value);
+        if (normalized !== null) return normalized;
+      }
+    }
+
+    var nestedKeys = ['data', 'result', 'userSpins', 'wheelSpins'];
+    for (var j = 0; j < nestedKeys.length; j += 1) {
+      var nested = payload[nestedKeys[j]];
+      var nestedCount = extractTicketCount(nested);
+      if (nestedCount !== null) return nestedCount;
+    }
+    return null;
+  }
+
+  function render(host, sourceRoot, pageContent) {
+    host.setAttribute('data-shangrila-lottery-source-hidden', 'true');
     var overlay = document.createElement('div');
     overlay.className = 'shangrila-lottery-root shangrila-lottery-reference shangrila-lottery-overlay';
     overlay.setAttribute(ROOT_MARKER, 'true');
@@ -197,7 +248,7 @@
         '</footer>',
       '</main>'
     ].join('');
-    host.replaceWith(overlay);
+    pageContent.appendChild(overlay);
     state.overlay = overlay;
     updateCountdown();
   }
@@ -288,6 +339,10 @@
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = '\
+      [data-shangrila-lottery-source-hidden="true"] {\
+        display: none !important;\
+      }\
+\
       .shangrila-lottery-overlay {\
         position: fixed !important;\
         z-index: 1000 !important;\
@@ -730,12 +785,9 @@
   }
 
   function restorePreviousRoot() {
+    if (state.root) state.root.removeAttribute('data-shangrila-lottery-source-hidden');
     if (state.overlay && state.root && state.overlay.parentNode &&
-        state.overlay.parentNode.firstElementChild === state.overlay) {
-      state.overlay.replaceWith(state.root);
-    } else if (state.overlay) {
-      state.overlay.remove();
-    }
+        state.overlay.parentNode.contains(state.overlay)) state.overlay.remove();
     state.pageContent = null;
     state.root = null;
     state.sourceRoot = null;
@@ -746,6 +798,7 @@
     if (state.observer) state.observer.disconnect();
     if (state.retryTimer) window.clearInterval(state.retryTimer);
     if (state.drawTimer) window.clearInterval(state.drawTimer);
+    if (state.spinsTimer) window.clearInterval(state.spinsTimer);
     restorePreviousRoot();
     var style = document.getElementById(STYLE_ID);
     if (style) style.remove();
