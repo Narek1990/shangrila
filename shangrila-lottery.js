@@ -14,12 +14,13 @@
 (function shangrilaLotteryTickets() {
   'use strict';
 
-  var VERSION = '2026-11-27-v6-api-sibling-overlay';
+  var VERSION = '2026-11-27-v7-meta-countdown';
   var STYLE_ID = 'shangrila-lottery-experience-style';
   var PAGE_CONTENT_SELECTOR = '[data-mj="page-content"]';
   var ROOT_SELECTOR = '[class*="wheelWrapper_content"]';
   var COUNT_SELECTOR = '[class*="spinCount"]';
   var SPINS_ENDPOINT = '/api/wheel/api/v1/UserSpinsSite/wheels/635/get-spins';
+  var WHEEL_META_ENDPOINT = '/api/wheel/api/v1/WheelsSite/wheels/635';
   var ROOT_MARKER = 'data-shangrila-lottery-root';
 
   if (window.__shangrilaLotteryTickets) {
@@ -38,7 +39,9 @@
     drawAt: null,
     drawTimer: null,
     spinsTimer: null,
-    spinsRequestId: 0
+    spinsRequestId: 0,
+    metaTimer: null,
+    metaRequestId: 0
   };
 
   window.__shangrilaLotteryTickets = {
@@ -73,6 +76,7 @@
     if (attempts >= 30) window.clearInterval(state.retryTimer);
   }, 500);
   state.spinsTimer = window.setInterval(refreshSpins, 30000);
+  state.metaTimer = window.setInterval(refreshWheelMetadata, 30000);
 
   function mount() {
     var pageContent = document.querySelector(PAGE_CONTENT_SELECTOR);
@@ -95,6 +99,7 @@
       state.sourceRoot = sourceRoot;
       state.ticketCount = readNumber(sourceRoot.querySelector(COUNT_SELECTOR));
       refreshSpins();
+      refreshWheelMetadata();
     } else {
       // React can update the original counter before the first-level node is
       // replaced. Re-read it without modifying the React-owned source tree.
@@ -145,6 +150,68 @@
       // Keep the last known count or the value rendered by the wheel when the
       // endpoint is unavailable or the player is not authenticated.
     });
+  }
+
+  function refreshWheelMetadata() {
+    var requestId = ++state.metaRequestId;
+    fetch(WHEEL_META_ENDPOINT, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' }
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Unable to load lottery metadata.');
+      return response.json();
+    }).then(function (payload) {
+      if (requestId !== state.metaRequestId) return;
+      var termsTitle = extractTermsTitle(payload);
+      var endDate = extractDateFromTitle(termsTitle);
+      if (endDate) setDrawDate(endDate);
+    }).catch(function () {
+      // Keep the placeholder countdown when metadata is unavailable.
+    });
+  }
+
+  function extractTermsTitle(payload) {
+    if (!payload || typeof payload !== 'object') return '';
+    var terms = payload.termsAndConditions;
+    if (typeof terms === 'string') return terms;
+    if (terms && typeof terms.title === 'string') return terms.title;
+    if (Array.isArray(terms)) {
+      for (var i = 0; i < terms.length; i += 1) {
+        if (terms[i] && typeof terms[i].title === 'string') return terms[i].title;
+      }
+    }
+    var nestedKeys = ['data', 'result', 'wheel'];
+    for (var j = 0; j < nestedKeys.length; j += 1) {
+      var nestedTitle = extractTermsTitle(payload[nestedKeys[j]]);
+      if (nestedTitle) return nestedTitle;
+    }
+    return '';
+  }
+
+  function extractDateFromTitle(title) {
+    if (!title) return null;
+    var text = String(title);
+    var isoMatch = text.match(/\b20\d{2}-\d{2}-\d{2}(?:[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/);
+    if (isoMatch) {
+      var isoDate = new Date(isoMatch[0]);
+      if (!Number.isNaN(isoDate.getTime())) return isoDate;
+    }
+
+    var dmyMatch = text.match(/\b(\d{1,2})[./-](\d{1,2})[./-](20\d{2})(?:[ T](\d{1,2}):?(\d{2})?(?::(\d{2}))?)?\b/);
+    if (dmyMatch) {
+      var dmyDate = new Date(
+        Number(dmyMatch[3]),
+        Number(dmyMatch[2]) - 1,
+        Number(dmyMatch[1]),
+        dmyMatch[4] ? Number(dmyMatch[4]) : 23,
+        dmyMatch[5] ? Number(dmyMatch[5]) : 59,
+        dmyMatch[6] ? Number(dmyMatch[6]) : 59
+      );
+      if (!Number.isNaN(dmyDate.getTime())) return dmyDate;
+    }
+
+    var parsedDate = new Date(text);
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
   }
 
   function extractTicketCount(payload) {
@@ -799,6 +866,7 @@
     if (state.retryTimer) window.clearInterval(state.retryTimer);
     if (state.drawTimer) window.clearInterval(state.drawTimer);
     if (state.spinsTimer) window.clearInterval(state.spinsTimer);
+    if (state.metaTimer) window.clearInterval(state.metaTimer);
     restorePreviousRoot();
     var style = document.getElementById(STYLE_ID);
     if (style) style.remove();
