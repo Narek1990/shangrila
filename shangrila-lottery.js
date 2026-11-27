@@ -6,6 +6,7 @@
  * "N Spin" value and can be refreshed by calling:
  *
  *   window.__shangrilaLotteryTickets.setTickets(12)
+ *   window.__shangrilaLotteryTickets.setDrawDate('2026-12-31T20:00:00Z')
  *
  * Remove the enhancement with:
  *   window.__shangrilaLotteryTickets.destroy()
@@ -30,13 +31,16 @@
     retryTimer: null,
     root: null,
     overlay: null,
-    ticketCount: null
+    ticketCount: null,
+    drawAt: null,
+    drawTimer: null
   };
 
   window.__shangrilaLotteryTickets = {
     version: VERSION,
     mount: mount,
     setTickets: setTickets,
+    setDrawDate: setDrawDate,
     getTickets: function () { return state.ticketCount; },
     destroy: destroy
   };
@@ -94,83 +98,85 @@
     return count;
   }
 
+  function setDrawDate(value) {
+    var date = value == null || value === '' ? null : new Date(value);
+    if (date && Number.isNaN(date.getTime())) throw new TypeError('Draw date must be a valid date.');
+    state.drawAt = date;
+    updateCountdown();
+    if (state.drawTimer) window.clearInterval(state.drawTimer);
+    state.drawTimer = date ? window.setInterval(updateCountdown, 1000) : null;
+    return date;
+  }
+
   function render(root) {
     hideSource(root);
     var overlay = document.createElement('div');
-    overlay.className = 'shangrila-lottery-root shangrila-lottery-overlay';
+    overlay.className = 'shangrila-lottery-root shangrila-lottery-reference shangrila-lottery-overlay';
     overlay.setAttribute(ROOT_MARKER, 'true');
+    overlay.style.setProperty('--shangrila-lottery-source-art', root.style.backgroundImage || 'none');
     overlay.innerHTML = [
       '<main class="shangrila-lottery-page" aria-label="Lottery dashboard">',
-        '<section class="shangrila-lottery-hero">',
-          '<div class="shangrila-lottery-orbit shangrila-lottery-orbit-one" aria-hidden="true"></div>',
-          '<div class="shangrila-lottery-orbit shangrila-lottery-orbit-two" aria-hidden="true"></div>',
-          '<div class="shangrila-lottery-hero-copy">',
-            '<p class="shangrila-lottery-eyebrow">SHANGRI LA LOTTERY</p>',
-            '<h1>Every ticket brings you closer to the win.</h1>',
-            '<p class="shangrila-lottery-hero-text">Use your earned entries in the next draw and keep your lucky streak moving.</p>',
-            '<div class="shangrila-lottery-draw-meta">',
-              '<span class="shangrila-lottery-live-dot" aria-hidden="true"></span>',
-              '<span>Next draw is coming soon</span>',
-            '</div>',
+        '<section class="shangrila-lottery-reference-hero">',
+          '<div class="shangrila-lottery-reference-art" role="img" aria-label="Shangri La lottery artwork">',
+            '<span class="shangrila-lottery-reference-art-kicker">SHANGRI LA VIP</span>',
+            '<strong>LOTTERY</strong>',
+            '<div class="shangrila-lottery-reference-art-orb orb-one" aria-hidden="true">1</div>',
+            '<div class="shangrila-lottery-reference-art-orb orb-two" aria-hidden="true">9</div>',
+            '<div class="shangrila-lottery-reference-art-orb orb-three" aria-hidden="true">3</div>',
+            '<span class="shangrila-lottery-reference-art-note">YOUR LUCKY NUMBERS</span>',
           '</div>',
-          '<div class="shangrila-lottery-ticket-panel">',
-            '<div class="shangrila-lottery-ticket-panel-top">',
-              '<span>AVAILABLE TICKETS</span>',
-              '<span class="shangrila-lottery-ticket-mark" aria-hidden="true">#</span>',
+          '<div class="shangrila-lottery-reference-content">',
+            '<p class="shangrila-lottery-reference-eyebrow">SHANGRI LA VIP LOTTERY</p>',
+            '<h1>Shangri La Lottery</h1>',
+            '<div class="shangrila-lottery-reference-balance">',
+              '<div class="shangrila-lottery-reference-balance-copy">',
+                '<span>You have earned</span>',
+                '<strong class="shangrila-lottery-ticket-count-value">0</strong>',
+                '<span class="shangrila-lottery-ticket-label">lottery tickets</span>',
+              '</div>',
+              '<div class="shangrila-lottery-reference-countdown">',
+                '<span class="shangrila-lottery-reference-countdown-title">Countdown to lottery draw</span>',
+                '<div class="shangrila-lottery-reference-countdown-grid">',
+                  countdownUnit('days', 'Days'),
+                  countdownUnit('hours', 'Hours'),
+                  countdownUnit('minutes', 'Mins'),
+                  countdownUnit('seconds', 'Secs'),
+                '</div>',
+              '</div>',
             '</div>',
-            '<strong class="shangrila-lottery-ticket-count-value">0</strong>',
-            '<span class="shangrila-lottery-ticket-label">Lottery tickets</span>',
-            '<div class="shangrila-lottery-ticket-panel-foot">',
-              '<span class="shangrila-lottery-ticket-status-dot" aria-hidden="true"></span>',
-              '<span>Ready for the next draw</span>',
+            '<div class="shangrila-lottery-reference-copy">',
+              '<p>Keep playing your favourite games to collect lottery tickets automatically.</p>',
+              '<p>Your ticket balance is updated from the current lottery count on the wheel page.</p>',
+              '<p>When the draw opens, every ticket gives you another chance to win.</p>',
             '</div>',
           '</div>',
         '</section>',
-        '<section class="shangrila-lottery-summary" aria-label="Lottery summary">',
-          '<div class="shangrila-lottery-summary-item">',
-            '<span class="shangrila-lottery-summary-label">DRAW STATUS</span>',
-            '<strong>Open for entries</strong>',
-            '<span>Tickets are counted automatically</span>',
-          '</div>',
-          '<div class="shangrila-lottery-summary-divider" aria-hidden="true"></div>',
-          '<div class="shangrila-lottery-summary-item">',
-            '<span class="shangrila-lottery-summary-label">YOUR CHANCE</span>',
-            '<strong>More tickets, more chances</strong>',
-            '<span>Every entry has the same odds</span>',
-          '</div>',
-          '<div class="shangrila-lottery-summary-divider" aria-hidden="true"></div>',
-          '<div class="shangrila-lottery-summary-item">',
-            '<span class="shangrila-lottery-summary-label">REWARDS</span>',
-            '<strong>Exclusive prizes</strong>',
-            '<span>Reward details appear after the draw</span>',
-          '</div>',
-        '</section>',
-        '<section class="shangrila-lottery-section">',
-          '<div class="shangrila-lottery-section-heading">',
-            '<div>',
-              '<p class="shangrila-lottery-eyebrow">REWARD BOARD</p>',
-              '<h2>What you could win</h2>',
+        '<section class="shangrila-lottery-reference-info-grid">',
+          '<article class="shangrila-lottery-reference-info-card">',
+            '<p class="shangrila-lottery-reference-eyebrow">HOW TO EARN TICKETS</p>',
+            '<h2>Play. Collect. Enter.</h2>',
+            '<div class="shangrila-lottery-reference-steps">',
+              stepCard('01', 'Play games', 'Play eligible casino or sportsbook games.'),
+              stepCard('02', 'Collect tickets', 'Your ticket count updates automatically.'),
+              stepCard('03', 'Join the draw', 'Keep your tickets ready for the next draw.'),
             '</div>',
-            '<span class="shangrila-lottery-section-note">Updated for the next draw</span>',
-          '</div>',
-          '<div class="shangrila-lottery-prize-grid">',
-            prizeCard('01', 'Grand draw', 'The headline reward', 'Top-tier prize for the lucky ticket'),
-            prizeCard('02', 'Lucky draw', 'A surprise reward', 'A second chance to take home a win'),
-            prizeCard('03', 'Daily reward', 'Instant bonus', 'Small wins that keep the fun going'),
-          '</div>',
+          '</article>',
+          '<article class="shangrila-lottery-reference-info-card shangrila-lottery-reference-prize-card">',
+            '<p class="shangrila-lottery-reference-eyebrow">LOTTERY STATUS</p>',
+            '<h2>Details for the next draw</h2>',
+            '<ul>',
+              '<li>Ticket balance is shown above.</li>',
+              '<li>Draw information will appear here when available.</li>',
+              '<li>Terms and eligibility rules apply.</li>',
+            '</ul>',
+          '</article>',
         '</section>',
-        '<section class="shangrila-lottery-how-it-works">',
-          '<div class="shangrila-lottery-section-heading">',
-            '<div>',
-              '<p class="shangrila-lottery-eyebrow">HOW IT WORKS</p>',
-              '<h2>Your path to the draw</h2>',
-            '</div>',
+        '<section class="shangrila-lottery-reference-rules">',
+          '<div>',
+            '<p class="shangrila-lottery-reference-eyebrow">GOOD TO KNOW</p>',
+            '<h2>More tickets, more chances.</h2>',
           '</div>',
-          '<div class="shangrila-lottery-steps">',
-            stepCard('01', 'Earn tickets', 'Play eligible games and collect entries automatically.'),
-            stepCard('02', 'Check your balance', 'Your available ticket count stays visible at the top.'),
-            stepCard('03', 'Wait for the draw', 'Keep an eye on the next draw and reward updates.'),
-          '</div>',
+          '<a href="/en/terms" target="_blank" rel="noopener">View terms and conditions</a>',
         '</section>',
         '<footer class="shangrila-lottery-footer">',
           '<span>Play responsibly. Terms and conditions apply.</span>',
@@ -180,6 +186,16 @@
     ].join('');
     document.body.appendChild(overlay);
     state.overlay = overlay;
+    updateCountdown();
+  }
+
+  function countdownUnit(key, label) {
+    return [
+      '<div class="shangrila-lottery-reference-countdown-unit">',
+        '<strong data-countdown="', key, '">--</strong>',
+        '<span>', label, '</span>',
+      '</div>'
+    ].join('');
   }
 
   function prizeCard(number, title, reward, detail) {
@@ -216,6 +232,23 @@
       element.textContent = state.ticketCount === 1 ? 'Lottery ticket' : 'Lottery tickets';
     });
     state.root.setAttribute('data-shangrila-lottery-tickets', String(state.ticketCount));
+  }
+
+  function updateCountdown() {
+    if (!state.overlay) return;
+    var values = { days: '--', hours: '--', minutes: '--', seconds: '--' };
+    if (state.drawAt) {
+      var remaining = Math.max(0, state.drawAt.getTime() - Date.now());
+      var totalSeconds = Math.floor(remaining / 1000);
+      values.days = String(Math.floor(totalSeconds / 86400));
+      values.hours = String(Math.floor((totalSeconds % 86400) / 3600)).padStart(2, '0');
+      values.minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      values.seconds = String(totalSeconds % 60).padStart(2, '0');
+    }
+    Object.keys(values).forEach(function (key) {
+      var element = state.overlay.querySelector('[data-countdown="' + key + '"]');
+      if (element) element.textContent = values[key];
+    });
   }
 
   function formatCount(count) {
@@ -499,6 +532,138 @@
 \
       @media (prefers-reduced-motion: reduce) {\
         .shangrila-lottery-prize-card { transition: none; }\
+      }\
+\
+      /* Screenshot-led Shangri La lottery treatment. */\
+      .shangrila-lottery-reference {\
+        --shangrila-lottery-green: #5dcc00;\
+        --shangrila-lottery-gold: #ddb86a;\
+        --shangrila-lottery-cream: #f4e6bf;\
+        --shangrila-lottery-purple: #191925;\
+        --shangrila-lottery-card: #1e1e2c;\
+        --shangrila-lottery-border: #36364e;\
+        background: var(--shangrila-lottery-purple) !important;\
+        color: #f5f5f7 !important;\
+      }\
+      .shangrila-lottery-reference::before {\
+        background: radial-gradient(circle at 16% 12%, rgba(85, 196, 0, .08), transparent 25%),\
+          radial-gradient(circle at 90% 10%, rgba(221, 184, 106, .08), transparent 28%),\
+          linear-gradient(145deg, #15151f 0%, #1b1b2a 58%, #15151f 100%);\
+      }\
+      .shangrila-lottery-reference::after { opacity: .08; background-size: 30px 30px; }\
+      .shangrila-lottery-reference .shangrila-lottery-page {\
+        width: min(1120px, 100%);\
+        padding: 28px clamp(16px, 4vw, 42px) 38px;\
+      }\
+      .shangrila-lottery-reference-hero {\
+        display: grid;\
+        grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);\
+        gap: 12px;\
+        align-items: stretch;\
+      }\
+      .shangrila-lottery-reference-art {\
+        position: relative;\
+        min-height: 360px;\
+        overflow: hidden;\
+        display: flex;\
+        flex-direction: column;\
+        justify-content: flex-end;\
+        padding: 30px 28px;\
+        border: 1px solid rgba(221, 184, 106, .34);\
+        border-radius: 14px;\
+        background-image: linear-gradient(145deg, rgba(5, 12, 9, .1), rgba(5, 8, 14, .82)), var(--shangrila-lottery-source-art);\
+        background-color: #0d1b16;\
+        background-position: center;\
+        background-size: cover;\
+        box-shadow: inset 0 0 80px rgba(0, 0, 0, .48);\
+      }\
+      .shangrila-lottery-reference-art::before {\
+        content: "";\
+        position: absolute;\
+        inset: 0;\
+        background: radial-gradient(circle at 28% 26%, rgba(221, 184, 106, .55) 0 3px, transparent 4px),\
+          radial-gradient(circle at 78% 18%, rgba(221, 184, 106, .4) 0 2px, transparent 3px),\
+          radial-gradient(circle at 62% 42%, rgba(93, 204, 0, .35) 0 4px, transparent 5px),\
+          linear-gradient(180deg, transparent 35%, rgba(3, 5, 4, .8) 100%);\
+        pointer-events: none;\
+      }\
+      .shangrila-lottery-reference-art-kicker, .shangrila-lottery-reference-art strong, .shangrila-lottery-reference-art-note { position: relative; z-index: 2; }\
+      .shangrila-lottery-reference-art-kicker { color: var(--shangrila-lottery-cream); font-size: 10px; font-weight: 800; letter-spacing: .18em; }\
+      .shangrila-lottery-reference-art strong { margin-top: 10px; color: var(--shangrila-lottery-gold); font-family: Georgia, serif; font-size: clamp(34px, 5vw, 58px); line-height: .9; letter-spacing: .04em; text-shadow: 0 4px 24px rgba(0, 0, 0, .6); }\
+      .shangrila-lottery-reference-art-note { margin-top: 15px; color: rgba(255,255,255,.68); font-size: 9px; letter-spacing: .2em; }\
+      .shangrila-lottery-reference-art-orb {\
+        position: absolute;\
+        z-index: 1;\
+        display: grid;\
+        place-items: center;\
+        width: 58px;\
+        height: 58px;\
+        border: 2px solid var(--shangrila-lottery-gold);\
+        border-radius: 50%;\
+        background: radial-gradient(circle at 32% 28%, #fff2bf, #dbac45 42%, #774c18 100%);\
+        color: #15151f;\
+        font-family: Georgia, serif;\
+        font-size: 26px;\
+        box-shadow: 0 8px 28px rgba(0,0,0,.42);\
+      }\
+      .shangrila-lottery-reference-art-orb::after { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; }\
+      .shangrila-lottery-reference-art .orb-one { top: 62px; left: 54px; }\
+      .shangrila-lottery-reference-art .orb-two { top: 124px; right: 44px; transform: scale(.82); }\
+      .shangrila-lottery-reference-art .orb-three { top: 184px; left: 125px; transform: scale(.66); }\
+      .shangrila-lottery-reference-content {\
+        padding: 17px 17px 24px;\
+        border: 1px solid var(--shangrila-lottery-border);\
+        border-radius: 14px;\
+        background: rgba(30, 30, 44, .94);\
+      }\
+      .shangrila-lottery-reference-eyebrow { margin: 0 0 10px; color: var(--shangrila-lottery-gold); font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }\
+      .shangrila-lottery-reference-content h1 { margin: 0 0 25px; color: var(--shangrila-lottery-green); font-size: clamp(25px, 3vw, 38px); line-height: 1.1; letter-spacing: -.045em; }\
+      .shangrila-lottery-reference-balance {\
+        display: grid;\
+        grid-template-columns: minmax(150px, .85fr) minmax(0, 1.15fr);\
+        gap: 18px;\
+        align-items: center;\
+        padding: 22px 25px;\
+        border: 1px solid #37374f;\
+        border-radius: 15px;\
+        background: #161621;\
+      }\
+      .shangrila-lottery-reference-balance-copy { display: flex; flex-direction: column; align-items: center; text-align: center; color: #f8f8fb; font-size: 16px; }\
+      .shangrila-lottery-reference-balance-copy strong { margin-top: 12px; color: var(--shangrila-lottery-green); font-size: 60px; font-weight: 400; line-height: .8; }\
+      .shangrila-lottery-reference-balance-copy .shangrila-lottery-ticket-label { margin-top: 14px; color: #f8f8fb; font-size: 17px; font-weight: 400; }\
+      .shangrila-lottery-reference-countdown { display: flex; flex-direction: column; align-items: center; gap: 15px; }\
+      .shangrila-lottery-reference-countdown-title { color: #f8f8fb; font-size: 16px; }\
+      .shangrila-lottery-reference-countdown-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; width: 100%; }\
+      .shangrila-lottery-reference-countdown-unit { display: grid; place-items: center; min-width: 54px; aspect-ratio: 1; padding: 6px; border: 2px solid #2c2c48; border-radius: 50%; background: #161621; }\
+      .shangrila-lottery-reference-countdown-unit strong { color: var(--shangrila-lottery-green); font-size: 19px; font-weight: 400; }\
+      .shangrila-lottery-reference-countdown-unit span { margin-top: 2px; color: #f4f4f7; font-size: 10px; }\
+      .shangrila-lottery-reference-copy { margin-top: 18px; color: #f3f3f6; font-size: 13px; line-height: 1.55; }\
+      .shangrila-lottery-reference-copy p { margin: 0 0 12px; }\
+      .shangrila-lottery-reference-info-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; margin-top: 12px; }\
+      .shangrila-lottery-reference-info-card { padding: 23px; border: 1px solid var(--shangrila-lottery-border); border-radius: 14px; background: rgba(30,30,44,.94); }\
+      .shangrila-lottery-reference-info-card h2 { margin: 0 0 19px; color: #f2f2f5; font-size: 23px; font-weight: 500; letter-spacing: -.03em; }\
+      .shangrila-lottery-reference-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }\
+      .shangrila-lottery-reference-steps .shangrila-lottery-step { min-height: 120px; padding: 15px; border: 1px solid #313148; border-radius: 10px; background: #181823; }\
+      .shangrila-lottery-reference-steps .shangrila-lottery-step-number { color: var(--shangrila-lottery-green); }\
+      .shangrila-lottery-reference-steps .shangrila-lottery-step h3 { margin: 16px 0 7px; color: #f4f4f7; font-size: 14px; }\
+      .shangrila-lottery-reference-steps .shangrila-lottery-step p { color: #a9a9b7; font-size: 11px; line-height: 1.45; }\
+      .shangrila-lottery-reference-prize-card ul { display: grid; gap: 13px; margin: 0; padding: 0 0 0 18px; color: #d5d5dc; font-size: 13px; line-height: 1.45; }\
+      .shangrila-lottery-reference-prize-card li::marker { color: var(--shangrila-lottery-green); }\
+      .shangrila-lottery-reference-rules { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 12px; padding: 22px 23px; border: 1px solid rgba(221,184,106,.25); border-radius: 14px; background: rgba(13, 26, 20, .55); }\
+      .shangrila-lottery-reference-rules h2 { margin: 0; color: var(--shangrila-lottery-cream); font-family: Georgia, serif; font-size: 26px; font-weight: 400; }\
+      .shangrila-lottery-reference-rules a { padding: 11px 15px; border: 1px solid rgba(93,204,0,.5); border-radius: 7px; color: var(--shangrila-lottery-green); font-size: 12px; text-decoration: none; }\
+      .shangrila-lottery-reference-rules a:hover { background: rgba(93,204,0,.1); }\
+      .shangrila-lottery-reference .shangrila-lottery-footer { margin-top: 22px; color: #858594; }\
+      .shangrila-lottery-reference .shangrila-lottery-footer a { color: var(--shangrila-lottery-gold); }\
+\
+      @media (max-width: 760px) {\
+        .shangrila-lottery-reference .shangrila-lottery-page { padding: 18px 12px 28px; }\
+        .shangrila-lottery-reference-hero, .shangrila-lottery-reference-info-grid { grid-template-columns: 1fr; }\
+        .shangrila-lottery-reference-art { min-height: 230px; }\
+        .shangrila-lottery-reference-balance { grid-template-columns: 1fr; padding: 19px 15px; }\
+        .shangrila-lottery-reference-countdown-grid { max-width: 320px; }\
+        .shangrila-lottery-reference-steps { grid-template-columns: 1fr; }\
+        .shangrila-lottery-reference-rules { align-items: flex-start; flex-direction: column; }\
       }\
     ';
     document.head.appendChild(style);
